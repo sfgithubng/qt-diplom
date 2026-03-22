@@ -1,7 +1,7 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
 
-MainWindow::MainWindow(QWidget *parent)
+MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
 {
@@ -17,6 +17,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->dateSelectorLabel->setText("Выбор даты");
     ui->dateSelector->setMinimumDate(QDate(2016, 8, 15));
     ui->dateSelector->setMaximumDate(QDate(2017, 9, 14));
+    ui->dateSelector->setCurrentPage(2016, 8);
     ui->getFlightsButton->setEnabled(false);
     ui->getFlightsButton->setText("Получить данные");
     ui->flightsTable->setRowCount(0);
@@ -24,16 +25,41 @@ MainWindow::MainWindow(QWidget *parent)
     ui->flightsTable->setEnabled(false);
     ui->flightsTable->setVisible(false);
 
+    mainWindowStatusBar = new QStatusBar();
+    this->setStatusBar(mainWindowStatusBar);
+    mainWindowStatusBar->addPermanentWidget(ui->dbConnStatusLabel);
     flightSelectionInitialized = false;
+
+    mainWindowMenuBar = new QMenuBar;
+    flightStatsAction = new QAction;
+    flightStatsAction->setEnabled(false);
+    flightStatsAction->setText("Просмотр статистики загруженности аэропорта");
+    mainWindowMenuBar->addAction(flightStatsAction);
+    this->setMenuBar(mainWindowMenuBar);
 
     DBConnectUIUpdate(false);
     dbHandler = new DBHandler(this);
     QObject::connect(dbHandler, &DBHandler::ConnectedToDB, this, &MainWindow::DBConnectUIUpdate);
+
+    flightStatsWindow = new FlightStatsWindow(dbHandler);
+    flightStatsWindow->setWindowTitle("Просмотр статистики загруженности аэропорта");
+    QObject::connect(this, &MainWindow::SetFlightStatsAirportName, flightStatsWindow, &FlightStatsWindow::SetAirportName);
+    QObject::connect(this, &MainWindow::NotifyToResetFlightsForm, flightStatsWindow, &FlightStatsWindow::ResetFlightsForm);
+    QObject::connect(this, &MainWindow::NotifyToRefreshFlightStats, flightStatsWindow, &FlightStatsWindow::RefreshFlightStats);
+    QObject::connect(flightStatsWindow, &FlightStatsWindow::FormClosed, this, &MainWindow::SetMainWindowEnabled);
+    QObject::connect(flightStatsAction, &QAction::triggered, this, &MainWindow::FlightStatsWindowShow);
+
+    this->move(200, 200);
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
+    delete flightStatsWindow;
+    delete mainWindowMenuBar;
+    delete flightStatsAction;
+    delete mainWindowStatusBar;
+    delete dbHandler;
 }
 
 void MainWindow::DBConnectUIUpdate(bool connectionStatus) {
@@ -57,6 +83,10 @@ void MainWindow::DBConnectUIUpdate(bool connectionStatus) {
         PopulateAirports();
     }
 
+}
+
+void MainWindow::SetMainWindowEnabled(bool enabledStatus) {
+    this->setEnabled(enabledStatus);
 }
 
 void MainWindow::PopulateAirports() {
@@ -85,9 +115,11 @@ void MainWindow::on_airportSelector_currentIndexChanged(int index)
 {
     if (index == -1) {
         ui->directionSelector->setEnabled(false);
+        flightStatsAction->setEnabled(false);
         return;
     }
     ui->directionSelector->setEnabled(true);
+    flightStatsAction->setEnabled(true);
 
     if (flightSelectionInitialized) {
         ui->getFlightsButton->setEnabled(true);
@@ -137,11 +169,21 @@ void MainWindow::on_getFlightsButton_clicked()
         ui->flightsTable->setItem(rowCount - 1, 2, airportNameItem);
     }
     ui->getFlightsButton->setEnabled(false);
+
+    auto flightsTableWidth = ui->flightsTable->width();
+    ui->flightsTable->horizontalHeader()->resizeSection(0, 90);
+    ui->flightsTable->horizontalHeader()->resizeSection(1, 180);
+    ui->flightsTable->horizontalHeader()->resizeSection(2, flightsTableWidth - 90 - 180 - 18);
 }
 
 
-void MainWindow::on_flightStatsButton_clicked()
+void MainWindow::FlightStatsWindowShow()
 {
-
+    emit SetFlightStatsAirportName(ui->airportSelector->currentText());
+    emit NotifyToResetFlightsForm();
+    emit NotifyToRefreshFlightStats(FlightRefreshType::all);    
+    SetMainWindowEnabled(false);
+    flightStatsWindow->show();
+    flightStatsWindow->move(200, 200);
 }
 

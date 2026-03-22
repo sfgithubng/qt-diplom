@@ -4,12 +4,12 @@
 #pragma once
 #include <QDateTime>
 #include <QDebug>
+#include <QMap>
 #include <QMessageBox>
 #include <QObject>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
-//#include <QTableWidget>
 #include <QTimer>
 #include <QVector>
 
@@ -17,6 +17,15 @@ struct FlightData {
     QString flightNumber;
     QString dateTime;
     QString airportName;
+};
+
+
+using AnnualFlightStats = QMap<QString, int>;
+using MonthlyFlightStats = QMap<QString, int>;
+
+enum class FlightDirection {
+    arrival,
+    departure
 };
 
 class DBHandler : public QObject {
@@ -33,9 +42,18 @@ public:
     explicit DBHandler(QObject* parent);
     ~DBHandler();
     QVector<QString> FetchAirportNames();
+    QString FetchAirportCodeByNameRu(QString airportNameRu);
     QVector<FlightData> FetchFlightsByAirportDirectionDate(QString flightScheduleType,
                                                            QString flightDate,
                                                            QString airportNameRu);
+    AnnualFlightStats FetchAnnualFlightCountByAirportDirectionYear(FlightDirection flightDirection,
+                                                           QString flightYear,
+                                                           QString airportNameRu);
+    MonthlyFlightStats FetchMonthlyFlightCountByAirportDirectionYear(FlightDirection flightDirection,
+                                                                     QString flightYear,
+                                                                     QString flightMonth,
+                                                                     QString daysInMonth,
+                                                                     QString airportNameRu);
 };
 
 #endif // DBHANDLER_H
